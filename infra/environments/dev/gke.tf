@@ -27,6 +27,18 @@ resource "google_container_cluster" "primary" {
   }
 
   deletion_protection = false
+  addons_config {
+    gcp_filestore_csi_driver_config {
+      enabled = false
+    }
+    gce_persistent_disk_csi_driver_config {
+      enabled = true
+    }
+  }
+
+  workload_identity_config {
+    workload_pool = "${var.project_id}.svc.id.goog"
+  }
 }
 
 resource "google_container_node_pool" "primary_nodes" {
