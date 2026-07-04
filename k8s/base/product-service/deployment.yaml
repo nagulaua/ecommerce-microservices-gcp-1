@@ -22,6 +22,16 @@ spec:
           envFrom:
             - configMapRef:
                 name: product-service-config
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://136.64.37.17:5432/productdb"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "appuser"
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: product-db-secret
+                  key: DB_PASSWORD
           resources:
             requests:
               cpu: "250m"
