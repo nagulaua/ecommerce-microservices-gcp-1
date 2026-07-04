@@ -1,0 +1,8 @@
+target/
+.terraform/
+*.tfstate
+*.tfstate.backup
+.env
+.DS_Store
+*.class
+build/
