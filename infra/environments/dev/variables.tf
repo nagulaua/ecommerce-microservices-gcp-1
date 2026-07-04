@@ -14,3 +14,8 @@ variable "environment" {
   type        = string
   default     = "dev"
 }
+variable "db_password" {
+  description = "Password for the Cloud SQL app user"
+  type        = string
+  sensitive   = true
+}

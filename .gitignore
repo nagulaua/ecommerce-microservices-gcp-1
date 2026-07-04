@@ -6,3 +6,4 @@ target/
 .DS_Store
 *.class
 build/
+terraform.tfvars.secret
