@@ -1,0 +1,13 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: notification-service
+  cloud:
+    gcp:
+      project-id: ${GCP_PROJECT_ID:ecommerce-platform-dev-501414}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus

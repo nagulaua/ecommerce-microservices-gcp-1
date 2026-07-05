@@ -1,0 +1,21 @@
+server:
+  port: 8080
+spring:
+  application:
+    name: order-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/orderdb}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  cloud:
+    gcp:
+      project-id: ${GCP_PROJECT_ID:ecommerce-platform-dev-501414}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
