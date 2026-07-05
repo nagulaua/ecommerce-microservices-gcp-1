@@ -1,37 +1,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: product-service
+  name: notification-service
   labels:
-    app: product-service
+    app: notification-service
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: product-service
+      app: notification-service
   template:
     metadata:
       labels:
-        app: product-service
+        app: notification-service
     spec:
       containers:
-        - name: product-service
-          image: us-central1-docker.pkg.dev/ecommerce-platform-dev-501414/ecommerce-images/product-service:v1
+        - name: notification-service
+          image: us-central1-docker.pkg.dev/ecommerce-platform-dev-501414/ecommerce-images/notification-service:v1
           ports:
             - containerPort: 8080
           envFrom:
             - configMapRef:
-                name: product-service-config
+                name: notification-service-config
           env:
-            - name: SPRING_DATASOURCE_URL
-              value: "jdbc:postgresql://34.172.80.220:5432/productdb"
-            - name: SPRING_DATASOURCE_USERNAME
-              value: "appuser"
-            - name: SPRING_DATASOURCE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: product-db-secret
-                  key: DB_PASSWORD
+            - name: GCP_PROJECT_ID
+              value: "ecommerce-platform-dev-501414"
           resources:
             requests:
               cpu: "100m"

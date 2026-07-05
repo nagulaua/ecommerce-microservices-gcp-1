@@ -1,27 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: product-service
+  name: order-service
   labels:
-    app: product-service
+    app: order-service
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: product-service
+      app: order-service
   template:
     metadata:
       labels:
-        app: product-service
+        app: order-service
     spec:
       containers:
-        - name: product-service
-          image: us-central1-docker.pkg.dev/ecommerce-platform-dev-501414/ecommerce-images/product-service:v1
+        - name: order-service
+          image: us-central1-docker.pkg.dev/ecommerce-platform-dev-501414/ecommerce-images/order-service:v1
           ports:
             - containerPort: 8080
           envFrom:
             - configMapRef:
-                name: product-service-config
+                name: order-service-config
           env:
             - name: SPRING_DATASOURCE_URL
               value: "jdbc:postgresql://34.172.80.220:5432/productdb"
@@ -32,6 +32,8 @@ spec:
                 secretKeyRef:
                   name: product-db-secret
                   key: DB_PASSWORD
+            - name: GCP_PROJECT_ID
+              value: "ecommerce-platform-dev-501414"
           resources:
             requests:
               cpu: "100m"

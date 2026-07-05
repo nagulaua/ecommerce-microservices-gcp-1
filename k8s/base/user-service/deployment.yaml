@@ -1,27 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: product-service
+  name: user-service
   labels:
-    app: product-service
+    app: user-service
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: product-service
+      app: user-service
   template:
     metadata:
       labels:
-        app: product-service
+        app: user-service
     spec:
       containers:
-        - name: product-service
-          image: us-central1-docker.pkg.dev/ecommerce-platform-dev-501414/ecommerce-images/product-service:v1
+        - name: user-service
+          image: us-central1-docker.pkg.dev/ecommerce-platform-dev-501414/ecommerce-images/user-service:v1
           ports:
             - containerPort: 8080
           envFrom:
             - configMapRef:
-                name: product-service-config
+                name: user-service-config
           env:
             - name: SPRING_DATASOURCE_URL
               value: "jdbc:postgresql://34.172.80.220:5432/productdb"
@@ -32,6 +32,8 @@ spec:
                 secretKeyRef:
                   name: product-db-secret
                   key: DB_PASSWORD
+            - name: JWT_SECRET
+              value: "change-this-secret-in-real-production-1234567890"
           resources:
             requests:
               cpu: "100m"

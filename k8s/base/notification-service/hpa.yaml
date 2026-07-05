@@ -1,12 +1,12 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: product-service-hpa
+  name: notification-service-hpa
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: product-service
+    name: notification-service
   minReplicas: 1
   maxReplicas: 6
   metrics:
