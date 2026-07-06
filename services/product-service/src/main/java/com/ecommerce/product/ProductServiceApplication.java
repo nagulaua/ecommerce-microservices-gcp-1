@@ -1,3 +1,4 @@
+// CI/CD pipeline test trigger
 package com.ecommerce.product;
 
 import org.springframework.boot.SpringApplication;
