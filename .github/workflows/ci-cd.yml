@@ -11,6 +11,10 @@ env:
   REGION: us-central1
   REPO: ecommerce-images
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -20,10 +24,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Authenticate to GCP
+      - name: Authenticate to GCP via Workload Identity Federation
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+          workload_identity_provider: 'projects/745029091386/locations/global/workloadIdentityPools/github-pool/providers/github-provider-v2'
+          service_account: 'github-actions-deployer@ecommerce-platform-dev-501414.iam.gserviceaccount.com'
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
