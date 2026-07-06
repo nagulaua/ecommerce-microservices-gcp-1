@@ -7,10 +7,13 @@ resource "google_sql_database_instance" "postgres" {
     tier              = "db-f1-micro"
     availability_type = "ZONAL"
 
+    database_flags {
+      name  = "max_connections"
+      value = "50"
+    }
+
     ip_configuration {
       ipv4_enabled    = true
-      # Allow connections from anywhere for now (dev only!).
-      # We'll lock this down with private networking/IAM later in the security phase.
       authorized_networks {
         name  = "allow-all-dev"
         value = "0.0.0.0/0"
@@ -20,6 +23,7 @@ resource "google_sql_database_instance" "postgres" {
     backup_configuration {
       enabled = true
     }
+  
   }
 
   deletion_protection = false

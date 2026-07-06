@@ -1,97 +1,130 @@
-# E-Commerce Microservices Platform (GCP)
+# E-Commerce Microservices Platform
 
-A cloud-native e-commerce platform built with Spring Boot microservices, deployed on Google Kubernetes Engine (GKE), with infrastructure fully defined as code via Terraform.
+A cloud-native e-commerce platform deploying containerized Spring Boot microservices to Google Kubernetes Engine (GCP), with all infrastructure provisioned as code via Terraform. The project automates everything from cluster provisioning to secrets management, autoscaling, and event-driven service communication.
 
-## Architecture
-                ┌─────────────────┐
-                │  GitHub Actions │  (CI/CD: build → push → deploy)
-                └────────┬────────┘
-                         ▼
-                ┌─────────────────┐
-                │ Artifact Registry│
-                └────────┬────────┘
-                         ▼
-    ┌────────────────────────────────────┐
-    │              GKE Cluster           │
-    │  ┌────────────┐  ┌────────────────┐│
-    │  │product-svc │  │  user-service  ││
-    │  │(Cloud SQL) │  │  (JWT auth)    ││
-    │  └────────────┘  └────────────────┘│
-    │  ┌────────────┐  ┌────────────────┐│
-    │  │order-svc   │─▶│notification-svc││
-    │  │(Pub/Sub    │  │(Pub/Sub        ││
-    │  │ publisher) │  │ subscriber)    ││
-    │  └────────────┘  └────────────────┘│
-    │  ┌────────────┐  ┌────────────────┐│
-    │  │ Prometheus │─▶│    Grafana    ││
-    │  └────────────┘  └────────────────┘│
-    └────────────────────────────────────┘
-             │              │
-      Cloud SQL      Secret Manager
-    (managed Postgres)  (credentials)
+## Features
 
-## Why I built this
+**Infrastructure (GCP)**
 
-I wanted hands-on experience with the full lifecycle of deploying microservices to a real cloud environment — not just writing Spring Boot APIs, but actually provisioning infrastructure, wiring up secrets properly, debugging IAM permission issues, and getting containers running reliably on Kubernetes under real constraints like GCP's free-tier quotas.
+* Compute: Provisions a GKE cluster with an autoscaling node pool (1-3 `e2-medium` nodes, VPC-native networking, Workload Identity enabled)
+* Networking: Dedicated VPC with secondary IP ranges for Pods and Services
+* Secret Management: Uses GCP Secret Manager for database credentials, injected into workloads as Kubernetes Secrets
+* Artifact Registry: Private Docker repository for all 4 service images
+* Database: Managed Cloud SQL (Postgres 16) instance, database, and dedicated app user
+* Messaging: Pub/Sub topic and subscription for event-driven order processing
+* Storage: GCS bucket for product image assets
+* IAM: Least-privilege role bindings for GKE node service accounts (Artifact Registry, Pub/Sub access)
 
-## Services
+**Application Services**
 
-| Service | Responsibility | Key Tech |
-|---|---|---|
-| `product-service` | Product catalog CRUD | Spring Boot, JPA, Cloud SQL |
-| `user-service` | Registration, login, JWT issuance | Spring Security, BCrypt, JJWT |
-| `order-service` | Order placement, publishes order events | Spring Cloud GCP Pub/Sub |
-| `notification-service` | Consumes order events for notifications | Pub/Sub subscriber |
+* `product-service` — product catalog CRUD, backed by Cloud SQL
+* `user-service` — registration/login with JWT issuance, BCrypt password hashing
+* `order-service` — order placement, publishes events to Pub/Sub
+* `notification-service` — subscribes to order events for downstream notifications
 
-## Infrastructure as Code (Terraform)
+**Kubernetes**
 
-- **GKE** — autoscaling node pool, Workload Identity enabled, VPC-native networking
-- **Cloud SQL** — managed Postgres 16
-- **Pub/Sub** — topic + subscription for event-driven order processing
-- **Cloud Storage** — bucket for product image assets
-- **Artifact Registry** — private Docker image registry
-- **Secret Manager** — database credentials, injected via Kubernetes Secrets, never hardcoded
-- **VPC** — dedicated network with secondary IP ranges for Pods/Services
+* Deployments with readiness/liveness probes backed by Spring Actuator health checks
+* HorizontalPodAutoscaler (CPU-based, scales 1-6 replicas per service)
+* ConfigMaps for non-secret config, Secrets for credentials
+* RBAC policies scoping service account permissions to least-privilege
 
-All infrastructure lives in [`infra/environments/dev`](infra/environments/dev) and is provisioned with a single `terraform apply`. I rebuild the environment on-demand from code (takes about 15-20 minutes) and tear it down between sessions to manage cloud costs.
+**CI/CD & Observability**
 
-## Kubernetes
+* GitHub Actions pipeline: builds, tags (by commit SHA), and pushes each service's image to Artifact Registry, then rolls out to GKE on every push to `main`
+* Prometheus scrapes `/actuator/prometheus` on each service; Grafana visualizes the metrics
 
-Each service has a Deployment (with readiness/liveness probes backed by Spring Actuator), a Service, a ConfigMap, and a HorizontalPodAutoscaler. I added RBAC policies to scope service account permissions to least-privilege read access. Manifests are in [`k8s/base`](k8s/base).
+## Prerequisites
 
-## CI/CD
+* Google Cloud SDK (`gcloud`) installed and authenticated
+* A GCP project with billing enabled (Cloud SQL and GKE are not fully covered by the always-free tier)
+* `kubectl`, `terraform`, `docker`, `java 17`, `maven` installed locally
+* `gke-gcloud-auth-plugin` installed (`gcloud components install gke-gcloud-auth-plugin`)
 
-[`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml) builds a Docker image per service, tags it with the commit SHA, pushes to Artifact Registry, and rolls out the update to GKE on every push to `main`.
+## Getting Started
 
-## Observability
+1. **Configure your environment**: set your GCP project ID and a database password.
 
-Prometheus scrapes each service's `/actuator/prometheus` endpoint (Micrometer-instrumented); Grafana visualizes what it collects. Manifests are in [`monitoring/`](monitoring).
+```bash
+cd infra/environments/dev
+nano terraform.tfvars            # set project_id, region
+nano terraform.tfvars.secret      # set db_password (never committed — see .gitignore)
+```
 
-## Security
+2. **Provision infrastructure**:
 
-- Passwords hashed with BCrypt — never stored in plaintext
-- Stateless JWT authentication — no server-side session state, so it scales horizontally
-- Database credentials sourced from GCP Secret Manager, injected as Kubernetes Secrets
-- IAM least-privilege bindings for GKE node service accounts
-- Kubernetes RBAC scoping in-cluster permissions
+```bash
+terraform init
+terraform apply -var-file="terraform.tfvars.secret"
+```
 
-## Current status
+3. **Connect kubectl to the new cluster**:
 
-All 4 services are containerized, pushed to Artifact Registry, and deployed to GKE, connected to a shared managed Cloud SQL instance, with secrets pulled from Secret Manager. I've verified `product-service` end-to-end multiple times — live CRUD operations against Cloud SQL, both from inside the cluster and through a public LoadBalancer.
+```bash
+gcloud container clusters get-credentials ecommerce-cluster --region us-central1 --project <your-project-id>
+```
 
-The Pub/Sub flow between `order-service` and `notification-service`, and JWT issuance in `user-service`, are implemented and deployed — I'm still working through full end-to-end verification on those.
+4. **Build and push each service image**:
 
-The Prometheus/Grafana stack and GitHub Actions CI/CD pipeline are complete.
+```bash
+gcloud auth configure-docker us-central1-docker.pkg.dev
+cd ../../../services/product-service   # repeat per service
+docker build -t us-central1-docker.pkg.dev/<project-id>/ecommerce-images/product-service:v1 .
+docker push us-central1-docker.pkg.dev/<project-id>/ecommerce-images/product-service:v1
+```
 
-## Some things I ran into building this
+5. **Create the database secret and deploy**:
 
-This Project I had to actually debug a handful of real infrastructure issues:
+```bash
+kubectl create secret generic product-db-secret --from-literal=DB_PASSWORD="$(gcloud secrets versions access latest --secret=product-db-password)"
+kubectl apply -f k8s/base/product-service/
+kubectl apply -f k8s/base/user-service/
+kubectl apply -f k8s/base/order-service/
+kubectl apply -f k8s/base/notification-service/
+```
 
-- GCP disk and CPU quota limits on a free-tier project, which meant tuning node pool disk types and pod resource requests to fit
-- IAM permission gaps between GKE node service accounts and Artifact Registry that caused image pulls to fail with 403s
-- Kubernetes' HPA `minReplicas` silently overriding manual `kubectl scale` commands
-- Getting liveness/readiness probe timing right against actual JVM cold-start behavior once I tightened CPU limits — Spring Boot startup slowed to 60-80 seconds, which needed longer `initialDelaySeconds` than the defaults
+6. **Verify**:
 
-## Running locally
+```bash
+kubectl get pods
+kubectl port-forward svc/product-service 8080:80
+curl http://localhost:8080/api/products
+```
 
-Each service can run standalone against a local Postgres instance via Docker Compose (see `product-service/docker-compose.yml`). Config is externalized through `application.yml` and environment variables so the same image works locally, in CI, and in the cloud.
+## Project Structure
+
+* `services/` — Spring Boot source for each microservice (`product-service`, `user-service`, `order-service`, `notification-service`), each with its own `pom.xml`, `Dockerfile`, and `application.yml`
+* `infra/` — Terraform IaC
+  * `environments/dev/` — GKE, Cloud SQL, VPC, Pub/Sub, Storage, Secret Manager, Artifact Registry
+  * `modules/` — reusable module scaffolding
+* `k8s/base/` — Kubernetes manifests per service (Deployment, Service, ConfigMap, HPA) plus RBAC
+* `monitoring/` — Prometheus and Grafana manifests
+* `.github/workflows/` — CI/CD pipeline definition
+
+## Verified Working
+
+* `product-service` — full CRUD confirmed against live Cloud SQL, both internally and via public LoadBalancer
+* `user-service` — registration and login confirmed end-to-end with a real signed JWT returned
+* `order-service` — order placement confirmed end-to-end with correct pricing calculation and Cloud SQL persistence
+
+## In Progress
+
+* Pub/Sub delivery confirmation between `order-service` and `notification-service`
+* First live run of the GitHub Actions CI/CD pipeline
+* First live deployment of the Prometheus/Grafana stack
+
+## Engineering Notes
+
+Building this surfaced real infrastructure problems rather than following a scripted path: GCP disk/CPU quota limits on a free-tier project, IAM permission gaps between GKE nodes and both Artifact Registry and Pub/Sub, Kubernetes HPA silently overriding manual scaling commands, and Cloud SQL connection pool exhaustion when multiple replicas of a service connected to a `db-f1-micro` instance simultaneously.
+
+## Cleanup
+
+To tear down all GCP resources created by this project and stop billing:
+
+```bash
+kubectl delete -f k8s/base/product-service/service-external.yaml
+cd infra/environments/dev
+terraform destroy -var-file="terraform.tfvars.secret"
+```
+
+Local Docker images and all source code remain unaffected — infrastructure can be fully rebuilt from code with `terraform apply`.

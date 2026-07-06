@@ -24,7 +24,7 @@ spec:
                 name: user-service-config
           env:
             - name: SPRING_DATASOURCE_URL
-              value: "jdbc:postgresql://34.172.80.220:5432/productdb"
+              value: "jdbc:postgresql://34.121.17.43:5432/productdb"
             - name: SPRING_DATASOURCE_USERNAME
               value: "appuser"
             - name: SPRING_DATASOURCE_PASSWORD
