@@ -13,7 +13,7 @@ A cloud-native e-commerce platform deploying containerized Spring Boot microserv
 * Database: Managed Cloud SQL (Postgres 16) instance, database, and dedicated app user
 * Messaging: Pub/Sub topic and subscription for event-driven order processing
 * Storage: GCS bucket for product image assets
-* IAM: Least-privilege role bindings for GKE node service accounts (Artifact Registry, Pub/Sub access)
+* IAM: Least-privilege role bindings for GKE node service accounts and Workload Identity bindings for pod-level GCP API access (Artifact Registry, Pub/Sub)
 
 **Application Services**
 
@@ -31,8 +31,8 @@ A cloud-native e-commerce platform deploying containerized Spring Boot microserv
 
 **CI/CD & Observability**
 
-* GitHub Actions pipeline: builds, tags (by commit SHA), and pushes each service's image to Artifact Registry, then rolls out to GKE on every push to `main`
-* Prometheus scrapes `/actuator/prometheus` on each service; Grafana visualizes the metrics
+* GitHub Actions pipeline: authenticates via Workload Identity Federation (no static service account keys), builds, tags (by commit SHA), and pushes each service's image to Artifact Registry, then rolls out to GKE on every push to `main`
+* Prometheus scrapes `/actuator/prometheus` on each service; Grafana visualizes the metrics on a live dashboard
 
 ## Prerequisites
 
@@ -83,7 +83,15 @@ kubectl apply -f k8s/base/order-service/
 kubectl apply -f k8s/base/notification-service/
 ```
 
-6. **Verify**:
+6. **Deploy monitoring**:
+
+```bash
+kubectl apply -f monitoring/prometheus/prometheus-config.yaml
+kubectl apply -f monitoring/prometheus/prometheus-deployment.yaml
+kubectl apply -f monitoring/grafana/grafana-deployment.yaml
+```
+
+7. **Verify**:
 
 ```bash
 kubectl get pods
@@ -93,29 +101,27 @@ curl http://localhost:8080/api/products
 
 ## Project Structure
 
-* `services/` — Spring Boot source for each microservice (`product-service`, `user-service`, `order-service`, `notification-service`), each with its own `pom.xml`, `Dockerfile`, and `application.yml`
-* `infra/` — Terraform IaC
-  * `environments/dev/` — GKE, Cloud SQL, VPC, Pub/Sub, Storage, Secret Manager, Artifact Registry
-  * `modules/` — reusable module scaffolding
+* `services/` — Spring Boot source for each microservice, each with its own `pom.xml`, `Dockerfile`, and `application.yml`
+* `infra/` — Terraform IaC (`environments/dev/` for GKE, Cloud SQL, VPC, Pub/Sub, Storage, Secret Manager, Artifact Registry; `modules/` for reusable scaffolding)
 * `k8s/base/` — Kubernetes manifests per service (Deployment, Service, ConfigMap, HPA) plus RBAC
 * `monitoring/` — Prometheus and Grafana manifests
 * `.github/workflows/` — CI/CD pipeline definition
+* `docs/screenshots/` — verification evidence (dashboards, pipeline runs, live logs)
 
 ## Verified Working
 
-* `product-service` — full CRUD confirmed against live Cloud SQL, both internally and via public LoadBalancer
-* `user-service` — registration and login confirmed end-to-end with a real signed JWT returned
-* `order-service` — order placement confirmed end-to-end with correct pricing calculation and Cloud SQL persistence
+* **`product-service`** — full CRUD confirmed against live Cloud SQL, both internally and via public LoadBalancer
+* **`user-service`** — registration and login confirmed end-to-end with a real signed JWT returned
+* **`order-service`** — order placement confirmed end-to-end with correct pricing calculation and Cloud SQL persistence
+* **`notification-service`** — Pub/Sub event delivery confirmed end-to-end (order-service publishes, notification-service receives and logs the event), resolved via a Workload Identity binding between the Kubernetes and GCP service accounts
+* **CI/CD pipeline** — GitHub Actions authenticates via Workload Identity Federation, builds, pushes, and deploys all 4 services to GKE on a live, successful pipeline run
+* **Monitoring** — Prometheus confirmed scraping all 4 services; Grafana dashboard displaying live metrics
 
-## In Progress
-
-* Pub/Sub delivery confirmation between `order-service` and `notification-service`
-* First live run of the GitHub Actions CI/CD pipeline
-* First live deployment of the Prometheus/Grafana stack
+All core components of the platform are built, deployed, and verified working end-to-end.
 
 ## Engineering Notes
 
-Building this surfaced real infrastructure problems rather than following a scripted path: GCP disk/CPU quota limits on a free-tier project, IAM permission gaps between GKE nodes and both Artifact Registry and Pub/Sub, Kubernetes HPA silently overriding manual scaling commands, and Cloud SQL connection pool exhaustion when multiple replicas of a service connected to a `db-f1-micro` instance simultaneously.
+Building this surfaced real infrastructure problems rather than following a scripted path: GCP disk/CPU quota limits on a free-tier project, IAM permission gaps between GKE nodes and both Artifact Registry and Pub/Sub, a Workload Identity misconfiguration that silently blocked pod-level Pub/Sub calls despite correct project-level IAM roles, Kubernetes HPA silently overriding manual scaling commands, Cloud SQL connection pool exhaustion under multiple replicas on a `db-f1-micro` instance, and migrating CI/CD authentication from a static service account key (blocked by an organization policy) to Workload Identity Federation.
 
 ## Cleanup
 
@@ -123,6 +129,7 @@ To tear down all GCP resources created by this project and stop billing:
 
 ```bash
 kubectl delete -f k8s/base/product-service/service-external.yaml
+kubectl delete -f monitoring/grafana/grafana-deployment.yaml
 cd infra/environments/dev
 terraform destroy -var-file="terraform.tfvars.secret"
 ```
